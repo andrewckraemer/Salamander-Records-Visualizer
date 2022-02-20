@@ -16,7 +16,7 @@ ui <- fluidPage(
   
   # Application title
   headerPanel("Salamander Records Visualizer"),
-  h5("This app uses GBIF data (www.gbif.org; February 2022) to plot species distributions for each salamander species recorded in the United States"),
+  h5("This app uses GBIF data (www.gbif.org; February 2022) to plot species distributions for each salamander recorded in the United States"),
   br(),
   
   # Sidebar for input data 
@@ -26,15 +26,18 @@ ui <- fluidPage(
       br(),
       radioButtons("yearswitch","",c("All"="all","Since 1990"="modern","Since 2010"="recent")),
       br(),
-      tags$h4("The most recent observation is:"),
-      h4(textOutput("year"))
+      tags$h5("The average number of observations each year is:"),
+      h5(textOutput("avgyear")),
+      br(),
+      tags$h5("The most recent observation is:"),
+      h5(textOutput("year"))
     ),
     # Show a map of the data
     mainPanel(
       plotOutput("plot"),
     )
   ),
-  tags$a(href="https://github.com/andrewckraemer/Salamander-Records-Visualizer","Andrew Kraemer's R script for this widget")
+  tags$a(href="https://github.com/andrewckraemer/Salamander-Records-Visualizer","Andrew Kraemer's R script for this app")
 )
 
 
@@ -47,8 +50,14 @@ server <- function(input, output,session) {
     yearswitch<-switch(input$yearswitch,all=1500,modern=1990,recent=2010)
     mander_yearsub<-subset(mander_non_na,mander_non_na$year>yearswitch)
     mander_data<-filter(mander_yearsub, species == specieschoice)
-    mostrecent<-max(mander_data$year)
+    mostrecent_temp<-max(mander_data$year)
+    mostrecent<-ifelse(mostrecent_temp==-Inf,"Why would this be here, anyway...?",mostrecent_temp)
     output$year<-renderText(mostrecent)
+    
+    meanyear.temp<-nrow(mander_data)/(max(mander_data$year)-min(mander_data$year))
+    meanyear<-ifelse(meanyear.temp==Inf,"No records :(",meanyear.temp)
+    output$avgyear<-renderText(meanyear)
+    
     countymap <- counties(cb = TRUE,resolution='20m')
     longlat<-data.frame(mander_data$decimalLongitude, mander_data$decimalLatitude)
     colnames(longlat)<-c('long','lat')
@@ -65,7 +74,7 @@ server <- function(input, output,session) {
     output$plot <- renderPlot({
       p<- ggplot(data_sf_summary) +
       geom_sf(aes(fill=counts),size=0.07) +
-      scale_fill_distiller("low - abundance - high", palette="Spectral",labels =c(),guide=guide_colourbar(title.position='top')) +
+      scale_fill_distiller("absent - common", palette="Spectral",labels =c(),guide=guide_colourbar(title.position='top')) +
       ggtitle(specieschoice)+
       coord_sf(xlim = c(-127, -68), ylim = c(22, 55)) +
       #ylab('Latitude')+xlab('Longitude')+
@@ -73,7 +82,7 @@ server <- function(input, output,session) {
             axis.title.x=element_blank(),axis.text.x=element_blank(),
             axis.title.y=element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
             panel.background = element_blank(), axis.line = element_blank(), 
-            legend.direction='horizontal',legend.position =c(0.25,0.2),plot.title = element_text(size = 20, face = "italic"))
+            legend.direction='horizontal',legend.position =c(0.15,0.2),plot.title = element_text(size = 20, face = "italic"))
      p
     })
   })
