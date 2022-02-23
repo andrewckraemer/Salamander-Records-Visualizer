@@ -1,22 +1,22 @@
-
+library(tidyverse)
 library(sf)
 library(dplyr)
 library(tigris) 
 library(plotly) 
-library(geodist)
 library(cdlTools)
+library(nngeo)
 
 ## Data pre-processing
 mander_data_full<-read.csv('mander_data.csv')
-mander_named<-mander_data_full[!(mander_data_full $species==""), ] #clean data - only include records identified to species
-mander_non_na <- mander_named %>% filter_at(vars(decimalLatitude, decimalLongitude, year),all_vars(!is.na(.))) #clean data - only include records with lat, long, and year
-sallylisttoprint<-names(table(mander_non_na$species))
+protectedareas<-read.csv('protectedareas.csv')
+protectedareas_sf <- protectedareas %>% 
+  st_as_sf(coords = c("long", "lat"))
+sallylisttoprint<-names(table(mander_data_full$species))
 statesf<-states(resolution='20m')
 countysf <- counties(cb = TRUE,resolution='20m')
-
-# Find best county per state (all salamander records)
 topCOstate<-st_read("topcountyperstate.shp")
-
+options(tigris_use_cache = TRUE)
+st_crs(protectedareas_sf) <- st_crs(countysf)
 
 
 ## User Interface
@@ -37,11 +37,10 @@ ui <- fluidPage(
       h5(textOutput("avgyear")),
       tags$h5("The most recent observation is:"),
       h5(textOutput("year")),
-      br(),
-      h4(selectInput('statechoice', 'If I visit this state, where will I see the most salamanders?',c(Choose='', state.name))),
+      hr(style = "border-top: 1px solid #000000;"),
+      h4(selectInput('statechoice', 'If I visit this state, where will I see the most salamanders?', state.name,selected="Wisconsin")),
       h4(textOutput("bestcounty")),
-      actionButton("do", "Run")
-      
+      h5(textOutput("neighborprotectedarea"))
     ),
     # Show a map of the data
     mainPanel(
@@ -56,10 +55,10 @@ ui <- fluidPage(
 server <- function(input, output,session) {
 
   # subset a single species
-  observeEvent(input$do,{
+  observe({
     specieschoice<-input$specieschoice
     yearswitch<-switch(input$yearswitch,all=1500,modern=1990,recent=2010)
-    mander_yearsub<-subset(mander_non_na,mander_non_na$year>yearswitch)
+    mander_yearsub<-subset(mander_data_full,mander_data_full$year>yearswitch)
     mander_data<-filter(mander_yearsub, species == specieschoice)
     mostrecent_temp<-max(mander_data$year)
     mostrecent<-ifelse(mostrecent_temp==-Inf,"Why would this be here, anyway...?",mostrecent_temp)
@@ -85,6 +84,16 @@ server <- function(input, output,session) {
     topcountyname<-paste(topcounty$NAME,"County")
     output$bestcounty<-renderText(topcountyname)
 
+    #find a great place to look
+    cents<-st_centroid(topcounty)
+    neighbor<-st_nn(cents, protectedareas_sf)
+    neighborprotectedarea<-strsplit(protectedareas_sf$parkname[neighbor[[1]]], "-")[[1]][1]
+    output$neighborprotectedarea <-renderText(neighborprotectedarea)
+	protectedlonglat<-protectedareas_sf[neighbor[[1]],]
+	st_crs(protectedlonglat) <- st_crs(countysf)
+
+    # calculate topcounty polygon centroid, find nearest lat long from park list(protectedareas), draw arrow with park name
+
     
   # plot
     output$plot <- renderPlot({
@@ -95,9 +104,9 @@ server <- function(input, output,session) {
       geom_sf(data=topcounty,size=0.3,fill="darkblue")+
       scale_fill_distiller("absent - common", palette="Spectral",labels =c(),guide=guide_colourbar(title.position='top')) +
       ggtitle(specieschoice)+
+      geom_sf(data=protectedlonglat, size = 1, shape = 8, color = "pink")+
+      #geom_sf_label(data=protectedlonglat, aes(label = neighborprotectedarea),nudge_x = -10, nudge_y = -1.5)+
       coord_sf(xlim = c(-127, -68), ylim = c(22, 55)) +
-      #geom_point(aes(x = bestLong, y = bestLat), size = 3, 
-      #             shape = 22, fill = "darkred")
       theme(axis.text.y=element_blank(),axis.ticks=element_blank(),
             axis.title.x=element_blank(),axis.text.x=element_blank(),
             axis.title.y=element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
