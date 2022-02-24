@@ -55,7 +55,11 @@ ui <- fluidPage(
       )  
     )
   ),
-  tags$a(href="https://github.com/andrewckraemer/Salamander-Records-Visualizer","Andrew Kraemer's R script for this app")
+  h5(tags$a(href="https://github.com/andrewckraemer/Salamander-Records-Visualizer","Andrew Kraemer's R script for this app")),
+  br(),
+  h6(div(HTML("<em>Please note that the status of several of these species is disputed. Whether or not they are ultimately formally considered full species by the scientific community, they are certainly unique populations worthy of admiration!</em>"))),
+  br(),
+  br()
 )
 
 
